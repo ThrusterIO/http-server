@@ -1,0 +1,37 @@
+{
+    "name": "thruster/http-server",
+    "type": "library",
+    "description": "Thruster HttpServer Component",
+    "keywords": ["http", "http-server", "httpserver", "server", "thruster"],
+    "homepage": "https://thruster.io",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Aurimas Niekis",
+            "email": "aurimas@niekis.lt"
+        }
+    ],
+    "require": {
+        "php": ">=7.0",
+        "psr/http-message": "~1.0",
+        "thruster/socket": "~1.0",
+        "thruster/http": "~0.1",
+        "thruster/event-emitter": "~1.0",
+        "thruster/server-application": "~0.1"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "~5.0"
+    },
+    "autoload": {
+        "psr-4": { "Thruster\\Component\\HttpServer\\": "src" }
+    },
+    "scripts": {
+        "test": "vendor/bin/phpunit",
+        "test-ci": "vendor/bin/phpunit -c phpunit.xml.ci"
+    },
+    "extra": {
+        "branch-alias": {
+            "dev-master": "1.0-dev"
+        }
+    }
+}
