@@ -17,7 +17,8 @@
         "thruster/socket": "~1.0",
         "thruster/http": "~0.1",
         "thruster/event-emitter": "~1.0",
-        "thruster/server-application": "~0.1"
+        "thruster/server-application": "~0.1",
+        "guzzlehttp/psr7": "~1.2"
     },
     "require-dev": {
         "phpunit/phpunit": "~5.0"

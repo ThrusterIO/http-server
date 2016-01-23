@@ -33,22 +33,82 @@ $ composer require thruster/http-server
 HTTP Server accepts Thruster Socket Server, `ServerApplicationInteface` implementing object and EventLoop
 
 ```php
+use GuzzleHttp\Psr7\Response;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Thruster\Component\EventLoop\EventLoop;
-use Thruster\Component\Socket\Server as SocketServer;
-use Thruster\Component\HttpServer\Server as HttpServer;
-use Thruster\Component\ServerApplication\ServerApplicationInterface;
+use Thruster\Component\Socket\Server;
+use Thruster\Component\HttpServer\HttpServer;
+use Thruster\Component\ServerApplication\SynchronousServerApplication;
 
 
-$application = new class implements ServerApplicationInterface { ... };
+$application = new class extends SynchronousServerApplication {
+    /**
+     * {@inheritDoc}
+     */
+    public function processRequestSynchronously(ServerRequestInterface $request) : ResponseInterface
+    {
+        $response = new Response(200);
+        $response->getBody()->write('Hello World!');
+
+        return $response;
+    }
+
+    public function preloadApplication()
+    {
+    }
+};
 
 $loop   = new EventLoop();
-$socket = new SocketServer($loop);
-$server = new HttpServer($application, $socket, $loop);
+$socket = new Server($loop);
+
+$httpServer = HttpServer::create($application)
+    ->attachTo($socket)
+    ->enableDebug();
 
 $socket->listen(1337, '0.0.0.0');
-$loop->run(); 
+
+$loop->run();
+```
+
+### Benchmark results
+
+```
+Server Software:
+Server Hostname:        127.0.0.1
+Server Port:            1337
+
+Document Path:          /
+Document Length:        22 bytes
+
+Concurrency Level:      10
+Time taken for tests:   2.148 seconds
+Complete requests:      10000
+Failed requests:        0
+Total transferred:      1340000 bytes
+HTML transferred:       220000 bytes
+Requests per second:    4655.03 [#/sec] (mean)
+Time per request:       2.148 [ms] (mean)
+Time per request:       0.215 [ms] (mean, across all concurrent requests)
+Transfer rate:          609.15 [Kbytes/sec] received
+
+Connection Times (ms)
+              min  mean[+/-sd] median   max
+Connect:        0    0   0.0      0       0
+Processing:     1    2   0.9      2      11
+Waiting:        1    2   0.9      2      11
+Total:          1    2   0.9      2      11
+
+Percentage of the requests served within a certain time (ms)
+  50%      2
+  66%      2
+  75%      2
+  80%      2
+  90%      3
+  95%      3
+  98%      5
+  99%      7
+ 100%     11 (longest request)
 ```
 
 ## Testing

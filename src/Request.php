@@ -3,65 +3,54 @@
 namespace Thruster\Component\HttpServer;
 
 use Psr\Http\Message\ResponseInterface;
-use Psr\Http\Message\ServerRequestInterface;
 use Thruster\Component\Http\RequestParser;
-use Thruster\Component\EventLoop\EventLoopInterface;
-use Thruster\Component\EventEmitter\EventEmitterTrait;
 use Thruster\Component\EventEmitter\EventEmitterInterface;
-use Thruster\Component\Socket\Connection as BaseConnection;
+use Thruster\Component\EventEmitter\EventEmitterTrait;
+use Thruster\Component\Socket\ConnectionInterface;
 
 /**
- * Class Connection
+ * Class Request
  *
  * @package Thruster\Component\HttpServer
  * @author  Aurimas Niekis <aurimas@niekis.lt>
  */
-class Connection implements EventEmitterInterface
+class Request implements EventEmitterInterface
 {
     use EventEmitterTrait;
 
     /**
-     * @var BaseConnection
+     * @var ConnectionInterface
      */
-    protected $connection;
-
-    /**
-     * @var EventLoopInterface
-     */
-    protected $loop;
+    private $connection;
 
     /**
      * @var bool
      */
-    protected $closed;
+    private $closed;
 
     /**
      * @var bool
      */
-    protected $writable;
+    private $writable;
 
     /**
      * @var bool
      */
-    protected $headWritten;
+    private $headWritten;
 
     /**
      * @var bool
      */
-    protected $chunkedEncoding;
+    private $chunkedEncoding;
 
     /**
      * @var RequestParser
      */
-    protected $requestParser;
+    private $requestParser;
 
-    public function __construct(
-        BaseConnection $connection,
-        EventLoopInterface $loop,
-        array $options = []
-    ) {
-        $this->connection         = $connection;
-        $this->loop               = $loop;
+    public function __construct(ConnectionInterface $connection, array $options = [])
+    {
+        $this->connection = $connection;
 
         $this->requestParser = new RequestParser($options);
 
@@ -96,7 +85,7 @@ class Connection implements EventEmitterInterface
         $this->requestParser->onData($data);
     }
 
-    public function isWritable()
+    public function isWritable() : bool
     {
         return $this->writable;
     }
@@ -109,22 +98,27 @@ class Connection implements EventEmitterInterface
             $headers[$name] = implode(', ', $values);
         }
 
-        $this->writeHead($response->getStatusCode(), $response->getReasonPhrase(), $headers);
+
+        $response->getBody()->rewind();
+        $size = $response->getBody()->getSize();
+
+        $this->writeHead($size > 0, $response->getStatusCode(), $response->getReasonPhrase(), $headers);
+
 
         $this->end($response->getBody()->getContents());
     }
 
-    public function writeHead($status, $reasonPhrase, array $headers)
+    public function writeHead(bool $hasBody, int $status, string $reasonPhrase, array $headers)
     {
-        if ($this->headWritten) {
+        if (true === $this->headWritten) {
             throw new \Exception('Response head has already been written.');
         }
 
-        if (isset($headers['Content-Length'])) {
+        if (true === isset($headers['Content-Length']) || false === $hasBody) {
             $this->chunkedEncoding = false;
         }
 
-        if ($this->chunkedEncoding) {
+        if (true === $this->chunkedEncoding) {
             $headers['Transfer-Encoding'] = 'chunked';
         }
 
@@ -156,11 +150,11 @@ class Connection implements EventEmitterInterface
 
     public function write($data)
     {
-        if (!$this->headWritten) {
+        if (false === $this->headWritten) {
             throw new \Exception('Response head has not yet been written.');
         }
 
-        if ($this->chunkedEncoding) {
+        if (true === $this->chunkedEncoding) {
             $len     = strlen($data);
             $chunk   = dechex($len) . "\r\n" . $data . "\r\n";
             $flushed = $this->connection->write($chunk);
@@ -177,7 +171,7 @@ class Connection implements EventEmitterInterface
             $this->write($data);
         }
 
-        if ($this->chunkedEncoding) {
+        if (true === $this->chunkedEncoding) {
             $this->connection->write("0\r\n\r\n");
         }
 
@@ -188,7 +182,7 @@ class Connection implements EventEmitterInterface
 
     public function close()
     {
-        if ($this->closed) {
+        if (true === $this->closed) {
             return;
         }
 
