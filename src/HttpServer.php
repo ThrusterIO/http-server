@@ -5,13 +5,18 @@ namespace Thruster\Component\HttpServer;
 use GuzzleHttp\Psr7\Response;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use Thruster\Component\Promise\PromiseInterface;
 use Thruster\Component\Socket\Server;
 use Thruster\Component\Socket\Connection;
 use Thruster\Component\Socket\ServerInterface;
 use Thruster\Component\Socket\ConnectionInterface;
-use Thruster\Component\Promise\PromiseInterface;
-use Thruster\Component\HttpServer\ResponseModifier\DateModifier;
-use Thruster\Component\HttpServer\ResponseModifier\PoweredByModifier;
+use Thruster\Component\HttpModifier\RequestModifierInterface;
+use Thruster\Component\HttpModifier\ResponseModifierInterface;
+use Thruster\Component\HttpModifier\RequestModifierCollection;
+use Thruster\Component\HttpModifier\ResponseModifierCollection;
+use Thruster\Component\HttpModifier\ServerRequestModifierCollection;
+use Thruster\Component\HttpModifiers\AddServerTimeModifier;
+use Thruster\Component\HttpModifiers\AddServerPoweredByModifier;
 use Thruster\Component\ServerApplication\ServerApplicationInterface;
 
 /**
@@ -35,14 +40,19 @@ class HttpServer
     private $servers;
 
     /**
+     * @var ResponseModifierCollection
+     */
+    private $responseModifiers;
+
+    /**
+     * @var ServerRequestModifierCollection
+     */
+    private $requestModifiers;
+
+    /**
      * @var bool
      */
     private $debug;
-
-    /**
-     * @var ResponseModifierInterface[]
-     */
-    private $responseModifiers;
 
     /**
      * @var int
@@ -68,10 +78,13 @@ class HttpServer
         $this->failedRequests = 0;
         $this->upTime         = time();
 
-        $this->responseModifiers = [
-            new DateModifier(),
-            new PoweredByModifier('Thruster/' . static::VERSION),
-        ];
+        $this->requestModifiers  = new ServerRequestModifierCollection();
+        $this->responseModifiers = new ResponseModifierCollection(
+            [
+                new AddServerTimeModifier(),
+                new AddServerPoweredByModifier('Thruster/' . static::VERSION),
+            ]
+        );
     }
 
     public static function create(ServerApplicationInterface $application) : self
@@ -91,13 +104,16 @@ class HttpServer
         return $this;
     }
 
+    public function withRequestModifier(RequestModifierInterface $modifier) : self
+    {
+        $this->requestModifiers->add($modifier);
+
+        return $this;
+    }
+
     public function withResponseModifier(ResponseModifierInterface $modifier) : self
     {
-        if (false !== array_search($modifier, $this->responseModifiers, true)) {
-            return $this;
-        }
-
-        $this->responseModifiers[] = $modifier;
+        $this->responseModifiers->add($modifier);
 
         return $this;
     }
@@ -135,7 +151,7 @@ class HttpServer
                         if (null !== $response) {
                             $connection->removeListener('data', [$request, 'feed']);
 
-                            $response = $this->modifyResponse($response);
+                            $response = $this->responseModifiers->modify($response);
 
                             $request->sendResponse($response);
                         }
@@ -148,8 +164,10 @@ class HttpServer
 
                         $connection->removeListener('data', [$request, 'feed']);
 
+                        $serverRequest = $this->requestModifiers->modify($serverRequest);
+
                         $fulfilled = function (ResponseInterface $response) use ($request) {
-                            $response = $this->modifyResponse($response);
+                            $response = $this->responseModifiers->modify($response);
                             $request->sendResponse($response);
                         };
 
@@ -159,18 +177,18 @@ class HttpServer
                             $response = new Response(500);
                             if (true === $this->debug) {
                                 $error = [
-                                    'class' => get_class($exception),
+                                    'class'   => get_class($exception),
                                     'message' => $exception->getMessage(),
-                                    'code' => $exception->getCode(),
-                                    'file' => $exception->getFile(),
-                                    'line' => $exception->getLine()
+                                    'code'    => $exception->getCode(),
+                                    'file'    => $exception->getFile(),
+                                    'line'    => $exception->getLine(),
                                 ];
 
                                 $response = $response->withHeader('Content-Type', 'application/json');
                                 $response->getBody()->write(json_encode($error));
                             }
 
-                            $response = $this->modifyResponse($response);
+                            $response = $this->responseModifiers->modify($response);
                             $request->sendResponse($response);
                         };
 
@@ -181,14 +199,5 @@ class HttpServer
                 $connection->on('data', [$request, 'feed']);
             }
         );
-    }
-
-    private function modifyResponse(ResponseInterface $response) : ResponseInterface
-    {
-        foreach ($this->responseModifiers as $responseModifier) {
-            $response = $responseModifier->modify($response);
-        }
-
-        return $response;
     }
 }

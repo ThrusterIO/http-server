@@ -18,6 +18,7 @@
         "thruster/http": "~0.1",
         "thruster/event-emitter": "~1.0",
         "thruster/server-application": "~0.1",
+        "thruster/http-modifiers": "~1.0",
         "guzzlehttp/psr7": "~1.2"
     },
     "require-dev": {
