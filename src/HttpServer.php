@@ -2,18 +2,15 @@
 
 namespace Thruster\Component\HttpServer;
 
-use GuzzleHttp\Psr7\Response;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
-use Thruster\Component\Promise\PromiseInterface;
 use Thruster\Component\Socket\Server;
-use Thruster\Component\Socket\Connection;
 use Thruster\Component\Socket\ServerInterface;
 use Thruster\Component\Socket\ConnectionInterface;
-use Thruster\Component\HttpModifier\RequestModifierInterface;
+use Thruster\Component\HttpMessage\Response;
 use Thruster\Component\HttpModifier\ResponseModifierInterface;
-use Thruster\Component\HttpModifier\RequestModifierCollection;
 use Thruster\Component\HttpModifier\ResponseModifierCollection;
+use Thruster\Component\HttpModifier\ServerRequestModifierInterface;
 use Thruster\Component\HttpModifier\ServerRequestModifierCollection;
 use Thruster\Component\HttpModifiers\AddServerTimeModifier;
 use Thruster\Component\HttpModifiers\AddServerPoweredByModifier;
@@ -33,6 +30,11 @@ class HttpServer
      * @var ServerApplicationInterface
      */
     private $application;
+
+    /**
+     * @var bool
+     */
+    private $applicationPreloaded;
 
     /**
      * @var Server[]
@@ -71,12 +73,13 @@ class HttpServer
 
     private function __construct(ServerApplicationInterface $application)
     {
-        $this->application    = $application;
-        $this->servers        = [];
-        $this->debug          = false;
-        $this->servedRequests = 0;
-        $this->failedRequests = 0;
-        $this->upTime         = time();
+        $this->application          = $application;
+        $this->applicationPreloaded = false;
+        $this->servers              = [];
+        $this->debug                = false;
+        $this->servedRequests       = 0;
+        $this->failedRequests       = 0;
+        $this->upTime               = time();
 
         $this->requestModifiers  = new ServerRequestModifierCollection();
         $this->responseModifiers = new ResponseModifierCollection(
@@ -98,13 +101,18 @@ class HttpServer
             return $this;
         }
 
+        if (false === $this->applicationPreloaded) {
+            $this->application->preloadApplication();
+            $this->applicationPreloaded = true;
+        }
+
         $this->servers[] = $server;
         $this->listenTo($server);
 
         return $this;
     }
 
-    public function withRequestModifier(RequestModifierInterface $modifier) : self
+    public function withRequestModifier(ServerRequestModifierInterface $modifier) : self
     {
         $this->requestModifiers->add($modifier);
 
